@@ -1,0 +1,9 @@
+name: env_rosetta
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pyrosetta
+  - py3dmol
+  - biopython
+prefix: /home/tonypeonio/miniforge3/envs/env_rosetta

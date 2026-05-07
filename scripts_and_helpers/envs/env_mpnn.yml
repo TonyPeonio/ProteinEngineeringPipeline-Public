@@ -1,0 +1,6 @@
+name: env_mpnn
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+prefix: /home/tonypeonio/miniforge3/envs/env_mpnn

@@ -1,0 +1,6 @@
+outs:
+- md5: 58f7a721c0eaa6613d1bbae6c780ee0f.dir
+  size: 47483230649
+  nfiles: 84531
+  hash: md5
+  path: old_results

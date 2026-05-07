@@ -1,0 +1,8 @@
+name: env_rfdiffusion
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pydantic
+  - conda-pack
+prefix: /home/tonypeonio/miniforge3/envs/env_rfdiffusion

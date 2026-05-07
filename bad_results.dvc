@@ -1,0 +1,6 @@
+outs:
+- md5: d507832ec2c50c945518307cd5b1f74f.dir
+  size: 50505233528
+  nfiles: 110170
+  hash: md5
+  path: bad_results

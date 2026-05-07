@@ -1,0 +1,8 @@
+name: env_colabfold
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - colabfold
+  - ipykernel
+prefix: /home/tonypeonio/miniforge3/envs/env_colabfold
