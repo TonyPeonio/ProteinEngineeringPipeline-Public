@@ -12,9 +12,3 @@ https://learn.schrodinger.com/public/pymol/current/Content/pymol/pymol_home.htm
 
 Awesome Youtube Series by Rosetta:
 https://www.youtube.com/watch?v=7fh90mdg2pI&t=931s
-
-pLDDT (predicted Local Distance Difference Test): Per-residue confidence score (0-100)
-PAE (Predicted Aligned Error): Pairwise residue position confidence (in Ångstroms)
-PTM (predicted TM-score): Overall fold quality assessment
-iPTM (predicted interface TM-score): Interface quality in multimers
-Ranking confidence: Single score used to rank multiple models
