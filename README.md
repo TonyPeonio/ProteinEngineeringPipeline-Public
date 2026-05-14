@@ -34,7 +34,7 @@ chmod +x setup.sh
 ```
 
 Step 2: Hardware-Specific Configuration (RFdiffusion)
-Because PyTorch and DGL require specific C++ binaries depending on your graphics card, so you must install them manually. Run the following commands based on your system. (Note: If these specific versions do not work for your hardware, please refer to the official RFdiffusion README for troubleshooting).
+Because PyTorch and DGL require specific C++ binaries depending on your graphics card, so you must install them manually. Run the following commands based on your system. (Note: If these specific versions do not work for your hardware, please refer to the official RFdiffusion README for troubleshooting. If you are using a new version of cuda (necessary with GPUs like the rtx 5070 oc), it might be necessary to modify the miniconda source code by going into /miniforge3/envs/env_rfdiffusion/lib/python3.9/site-packages/dgl/graphbolt/__init__.py and commenting out the bottom line (load_graphbolt()), which has the potential to get rid of one of the errors you may encounter while trying to balance new pytorch with old things like dgl and graphbolt).
 
 1. Activate the environment:
 
@@ -46,9 +46,12 @@ conda activate env_rfdiffusion
 For Modern NVIDIA GPUs (RTX 30-series, 40-series, 50-series / CUDA 12.1+ (possibility for new GPUs to require nightly torch)):
 
 ```bash
-pip install torch==2.4.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.8.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip install dgl -f https://data.dgl.ai/wheels/cu121/repo.html
 ```
+
+This might not be necessary on all GPUs, but the only way I could get my RTX 5070 OC working was by going into ~/miniforge3/envs/env_rfdiffusion/lib/python3.9/site-packages/dgl/graphbolt/__init__.py and modifying the final line, as noted in the instructions above.
+
 For Legacy NVIDIA GPUs (RTX 20-series or older / CUDA 11.8):
 ```bash
 pip install torch==2.4.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
