@@ -8,26 +8,24 @@ import math
 # ==========================================
 # ARGUMENT PARSING & CONFIGURATION
 # ==========================================
-if len(sys.argv) < 4:
-    print("Usage: python mpnn_sequence_filtering.py <WILDCARDS> <TARGET_PDB_PATH> <PAINT_FRACTION> [CORE_PROTECT_FRACTION]")
-    print("Example: python mpnn_sequence_filtering.py 10 ../pdb/cleaned_pdb/7ut8_clean.pdb 0.5 0.25")
-    print("\nSettings:")
-    print("  PAINT_FRACTION: 0.5 = Paint the closest 50% of the contextual interface with Serines.")
-    print("  CORE_PROTECT_FRACTION: 0.25 = Protect the top 25% most internally connected 'load-bearing' residues from being painted (Keeps RMSD < 1.0).")
+if len(sys.argv) < 6:
+    print("Usage: python mpnn_sequence_filtering.py <WILDCARDS> <TARGET_PDB_PATH> <PAINT_FRACTION> <CORE_PROTECT_FRACTION> <ROUND_DIR>")
     sys.exit(1)
 
 WILDCARDS_NEEDED = int(sys.argv[1])
 WILD_TYPE_PDB_PATH = os.path.abspath(sys.argv[2])
 SERINE_PAINT_FRACTION = float(sys.argv[3])
-# Default to protecting the top 20% most connected residues if not provided
-CORE_PROTECT_FRACTION = float(sys.argv[4]) if len(sys.argv) > 4 else 0.20 
+CORE_PROTECT_FRACTION = float(sys.argv[4])
+ROUND_DIR = os.path.abspath(sys.argv[5])
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "../../"))
 
-MPNN_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs/mpnn_results/seqs")
-PARSED_JSONL_PATH = os.path.join(PROJECT_ROOT, "outputs/mpnn_results/parsed_pdbs.jsonl")
-OUTPUT_FASTA_DIR = os.path.join(PROJECT_ROOT, "outputs/colabfold_multimer_inputs")
+# Use the ROUND_DIR directly
+INPUT_DIR = os.path.join(ROUND_DIR, "mpnn_results")
+MPNN_OUTPUT_DIR = os.path.join(ROUND_DIR, "mpnn_results", "seqs")
+PARSED_JSONL_PATH = os.path.join(ROUND_DIR, "mpnn_results", "parsed_pdbs.jsonl")
+OUTPUT_FASTA_DIR = os.path.join(ROUND_DIR, "colabfold_multimer_inputs")
 
 print("Extracting target sequences and filtering ProteinMPNN results...")
 os.makedirs(OUTPUT_FASTA_DIR, exist_ok=True)

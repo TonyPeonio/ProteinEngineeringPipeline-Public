@@ -5,9 +5,10 @@ set -e
 NUM_RECYCLES=${1:-12}
 TOLERANCE=${2:-0.5}
 NUM_MODELS=${3:-5}
+ROUND_DIR=${4}
 
-INPUT_DIR="../../outputs/colabfold_multimer_inputs"
-OUTPUT_DIR="../../outputs/colabfold_multimer_results"
+INPUT_DIR="$ROUND_DIR/colabfold_multimer_inputs"
+OUTPUT_DIR="$ROUND_DIR/colabfold_multimer_results"
 
 # Make the output directories if they don't exist
 mkdir -p "$OUTPUT_DIR"

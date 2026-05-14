@@ -19,13 +19,11 @@ echo "INITIATING PIPELINE AT: $PROJECT_ROOT"
 # MASTER CONFIGURATION
 # ==========================================
 # PDB Fetching Config
-PDB_ID="7ut8"
+PDB_ID="1ycr"
 DESIGNABLE_CHAINS="B"
 
 # RFdiffusion Config
-BINDER_LENGTH="55-65"
 NUM_DESIGNS=1
-AA_RANGE="A43-123/0 A126-318"
 HOTSPOTS="" 
 
 # ProteinMPNN Config
@@ -66,32 +64,67 @@ eval "$(conda shell.bash hook)"
 export PYTHONWARNINGS="ignore"
 
 # ==========================================
-# PIPELINE EXECUTION
+# PIPELINE EXECUTION (EVOLUTIONARY LOOP)
 # ==========================================
+MAX_ROUNDS=30
+EVO_LOG="$OUTPUT_DIR/evolution_log.csv"
 
 echo "--- STEP 1: PDB Fetching (Pipeline Preparation) ---"
 conda activate env_rfdiffusion
 python 1_pdb_fetcher.py "$PDB_ID"
 
-TARGET_PDB="$PROJECT_ROOT/scripts_and_helpers/pdb/${PDB_ID}_clean.pdb"
+# Initialize the "Common Ancestor"
+CURRENT_BEST_PDB="$PROJECT_ROOT/scripts_and_helpers/pdb/${PDB_ID}_clean.pdb"
 
-echo "--- STEP 2: RFdiffusion (Complex Shape Generation) ---"
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-conda activate env_rfdiffusion
-bash 2_run_rfdiffusion.sh "$TARGET_PDB" "$AA_RANGE" "$BINDER_LENGTH" "$NUM_DESIGNS" "$HOTSPOTS"
+# Create the log file for your graphs
+echo "Round,Score_pLDDT,Score_PAE,Mutations_from_Ancestor" > "$EVO_LOG"
+for ROUND in $(seq 1 $MAX_ROUNDS); do
+    echo "=========================================="
+    echo "       STARTING EVOLUTION ROUND $ROUND    "
+    echo "=========================================="
+    
+    # --- THE MAGIC IF STATEMENT ---
+    if [ "$ROUND" -eq 1 ]; then
+        # Round 1: Original PDB numbering
+        ACTIVE_TARGET="A25-109"
+        ACTIVE_BINDER="B17-29"
+    else
+        # Round 2+: ColabFold renumbers chains starting from 1
+        ACTIVE_TARGET="A1-85"
+        ACTIVE_BINDER="B1-13"
+    fi
+    
+    # Create round-specific output folders
+    ROUND_DIR="$OUTPUT_DIR/round_$ROUND"
+    mkdir -p "$ROUND_DIR"
 
-echo "--- STEP 3: ProteinMPNN (Complex Sequence Generation) ---"
-conda activate env_mpnn
-bash 3_run_mpnn.sh "$SEQ_PER_BACKBONE" "$MPNN_TEMP" "$DESIGNABLE_CHAINS"
-conda activate env_rosetta
-python 3-2_mpnn_sequence_filtering.py "$WILDCARDS" "$TARGET_PDB" "$SERINE_PAINTING" "$CORE_PROTECTION"
+    echo "--- STEP 2: RFdiffusion (Mutating the Backbone) ---"
+    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    conda activate env_rfdiffusion
+    
+    # Pass ACTIVE_BINDER instead of a fixed length
+    bash 2_run_rfdiffusion.sh "$CURRENT_BEST_PDB" "$ACTIVE_TARGET" "$ACTIVE_BINDER" "$NUM_DESIGNS" "$HOTSPOTS" "$ROUND_DIR"
 
-echo "--- STEP 4: ColabFold (Multimer Validation) ---"
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
-export XLA_PYTHON_CLIENT_ALLOCATOR=platform
-export TF_FORCE_UNIFIED_MEMORY=1
+    echo "--- STEP 3: ProteinMPNN (Translating to Sequence) ---"
+    conda activate env_mpnn
+    bash 3_run_mpnn.sh "$SEQ_PER_BACKBONE" "$MPNN_TEMP" "$DESIGNABLE_CHAINS" "$ROUND_DIR"
+    conda activate env_rosetta
+    python 3-2_mpnn_sequence_filtering.py "$WILDCARDS" "$CURRENT_BEST_PDB" "$SERINE_PAINTING" "$CORE_PROTECTION" "$ROUND_DIR"
 
-conda activate "$COLAB_DIR"
-bash 4_run_localcolabfold.sh "$NUM_RECYCLES" "$RECYCLE_TOLERANCE" "$NUM_MODELS"
+    echo "--- STEP 4: ColabFold (The Oracle's Judgment) ---"
+    export XLA_PYTHON_CLIENT_PREALLOCATE=false
+    export XLA_PYTHON_CLIENT_ALLOCATOR=platform
+    export TF_FORCE_UNIFIED_MEMORY=1
+    conda activate "$COLAB_DIR"
+    bash 4_run_localcolabfold.sh "$NUM_RECYCLES" "$RECYCLE_TOLERANCE" "$NUM_MODELS" "$ROUND_DIR"
 
-echo "PIPELINE COMPLETE!"
+    echo "--- STEP 5: Selection & Feedback (Closing the Loop) ---"
+    conda activate base
+    # This python script reads the ColabFold JSON, decides if the new design is better, 
+    # updates the log for your graphs, and outputs the path to the PDB for the next round.
+    CURRENT_BEST_PDB=$(python 5_evaluate_and_select.py --round $ROUND --round_dir "$ROUND_DIR" --log "$EVO_LOG" --current_best "$CURRENT_BEST_PDB")
+    
+    echo "Round $ROUND Complete. Current Best Seed: $CURRENT_BEST_PDB"
+done
+
+echo "EVOLUTIONARY PIPELINE COMPLETE!"

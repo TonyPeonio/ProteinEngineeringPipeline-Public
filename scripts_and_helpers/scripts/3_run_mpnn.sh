@@ -7,21 +7,21 @@ set -e
 # ==========================================
 if [ -z "$3" ]; then
     echo "Error: DESIGNABLE_CHAINS argument is missing."
-    echo "Usage: $0 <NUM_SEQS> <TEMP> <DESIGNABLE_CHAINS>"
-    echo "Example: $0 5 0.1 A"
+    echo "Usage: $0 <NUM_SEQS> <TEMP> <DESIGNABLE_CHAINS> <ROUND_DIR>"
     exit 1
 fi
 
 NUM_SEQS=${1:-5}
 TEMP=${2:-0.1}
 DESIGNABLE_CHAINS=${3}
+ROUND_DIR=${4}
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/../../" && pwd)
 
 MPNN_DIR="$PROJECT_ROOT/ProteinMPNN"
-INPUT_DIR="$PROJECT_ROOT/outputs/rfdiffusion" 
-OUTPUT_DIR="$PROJECT_ROOT/outputs/mpnn_results"
+INPUT_DIR="$ROUND_DIR/rfdiffusion"
+OUTPUT_DIR="$ROUND_DIR/mpnn_results"
 SEQS_DIR="$OUTPUT_DIR/seqs"
 STAGING_DIR="$OUTPUT_DIR/staging_pdbs"
 
@@ -44,7 +44,6 @@ for pdb_file in "$INPUT_DIR"/*.pdb; do
     
     # If MPNN hasn't made a .fa file for this backbone yet, stage it
     if [ ! -f "$SEQS_DIR/$base_name.fa" ]; then
-        # Using cp instead of ln -s to avoid any broken symlink headaches
         cp "$pdb_file" "$STAGING_DIR/"
         NEW_MODELS=$((NEW_MODELS + 1))
     fi
@@ -101,8 +100,6 @@ python "$MPNN_DIR/protein_mpnn_run.py" \
 # ==========================================
 # REBUILD MASTER DATASET
 # ==========================================
-# Instead of risky text appending, we just parse the whole input folder in < 1 second.
-# This guarantees a perfect JSONL file for the Python script every single time.
 echo "Rebuilding complete master parsed_pdbs.jsonl..."
 python "$MPNN_DIR/helper_scripts/parse_multiple_chains.py" \
     --input_path="$INPUT_DIR" \

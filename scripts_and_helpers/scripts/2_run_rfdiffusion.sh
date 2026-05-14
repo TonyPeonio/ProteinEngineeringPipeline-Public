@@ -11,6 +11,7 @@ AA_RANGE=$2
 BINDER_LENGTH=$3
 TARGET_NUM_DESIGNS=$4
 HOTSPOTS=$5
+ROUND_DIR=$6
 
 # ==========================================
 # DYNAMIC PATH ANCHORING
@@ -19,7 +20,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/../../" && pwd)
 
 RFDIFFUSION_DIR="$PROJECT_ROOT/RFdiffusion"
-OUTPUT_DIR="$PROJECT_ROOT/outputs/rfdiffusion"
+OUTPUT_DIR="$ROUND_DIR/rfdiffusion"
 mkdir -p "$OUTPUT_DIR"
 
 TARGET_BASENAME=$(basename "$TARGET_PDB" .pdb)
@@ -57,7 +58,8 @@ python "$RFDIFFUSION_DIR/scripts/run_inference.py" \
     inference.num_designs=$REMAINING \
     ppi.hotspot_res=["$HOTSPOTS"] \
     hydra.run.dir="$STAGING_DIR" \
-    hydra.output_subdir=null
+    hydra.output_subdir=null \
+    diffuser.partial_T=15
 
 echo "Generation complete. Integrating files into main directory..."
 
