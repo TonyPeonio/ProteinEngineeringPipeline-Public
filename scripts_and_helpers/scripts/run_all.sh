@@ -20,12 +20,12 @@ echo "INITIATING PIPELINE AT: $PROJECT_ROOT"
 # ==========================================
 # PDB Fetching Config
 PDB_ID="1ycr"
-DESIGNABLE_CHAINS="C"
+DESIGNABLE_CHAINS="B"
 
 # RFdiffusion Config
 BINDER_LENGTH="15-25"
 NUM_DESIGNS=5
-AA_RANGE="A25-109/0 B17-29"
+AA_RANGE="A25-109"
 HOTSPOTS="" 
 
 # ProteinMPNN Config

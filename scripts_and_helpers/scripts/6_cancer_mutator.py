@@ -1,34 +1,35 @@
 import os
+import glob
 import random
-import argparse
 from Bio.PDB import PDBParser
-from Bio.PDB.Polypeptide import three_to_one, is_aa
 
-# Standard amino acids for mutation
 AMINO_ACIDS = list("ACDEFGHIKLMNPQRSTVWY")
-# The native p53 peptide sequence from 1YCR that MDM2 MUST still bind
 NATIVE_P53_SEQ = "ETFSDLWKLLPENNV"
 
+# Bulletproof dictionary to avoid Biopython version errors
+THREE_TO_ONE = {
+    'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E',
+    'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
+    'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N',
+    'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S',
+    'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+}
+
 def extract_sequence(chain):
-    """Extracts a 1-letter amino acid sequence from a PDB chain."""
+    """Extracts a 1-letter amino acid sequence safely using a standard dictionary."""
     seq = ""
     for residue in chain:
-        if is_aa(residue, standard=True):
-            try:
-                seq += three_to_one(residue.get_resname())
-            except KeyError:
-                pass
+        resname = residue.get_resname().strip().upper()
+        if resname in THREE_TO_ONE:
+            seq += THREE_TO_ONE[resname]
     return seq
 
 def mutate_sequence(seq, num_mutations=2, start_idx=40, end_idx=90):
-    """Randomly mutates amino acids in the target binding region."""
     seq_list = list(seq)
-    # Ensure indices are within bounds
     start = max(0, start_idx)
     end = min(len(seq) - 1, end_idx)
     
     mutated_positions = []
-    
     for _ in range(num_mutations):
         idx = random.randint(start, end)
         current_aa = seq_list[idx]
@@ -38,44 +39,44 @@ def mutate_sequence(seq, num_mutations=2, start_idx=40, end_idx=90):
         
     return "".join(seq_list), mutated_positions
 
-def generate_mutants(input_pdb, output_dir, num_mutants=5):
+def generate_mutants(input_dir, output_dir, num_mutants=5):
     os.makedirs(output_dir, exist_ok=True)
     
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("complex", input_pdb)
+    # AUTOMATION: Automatically find the lead drug PDB
+    pdbs = glob.glob(os.path.join(input_dir, "*.pdb"))
+    if not pdbs:
+        print(f"Error: No PDB files found in {input_dir}")
+        return
+        
+    latest_pdb = max(pdbs, key=os.path.getctime)
+    print(f"Auto-detected lead drug: {latest_pdb}")
     
-    # Assuming Chain A is MDM2 and Chain B is the Drug
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("complex", latest_pdb)
+    
     model = structure[0]
     mdm2_seq = extract_sequence(model['A'])
     drug_seq = extract_sequence(model['B'])
     
-    print(f"Wildtype MDM2 Length: {len(mdm2_seq)}")
-    print(f"Lead Drug Length: {len(drug_seq)}")
+    print(f"Wildtype MDM2 Length: {len(mdm2_seq)} | Lead Drug Length: {len(drug_seq)}")
     
     for i in range(1, num_mutants + 1):
-        # 1. Mutate MDM2
         mutant_mdm2_seq, mutations = mutate_sequence(mdm2_seq)
         mut_string = "_".join(mutations)
-        print(f"Generating Mutant {i}: {mut_string}")
         
-        # 2. Write Mutant vs Drug FASTA (Test A: Evasion)
-        drug_fasta_path = os.path.join(output_dir, f"mutant_{i}_vs_drug.fasta")
-        with open(drug_fasta_path, "w") as f:
-            f.write(f">mutant_{i}_vs_drug | {mut_string}\n")
-            f.write(f"{mutant_mdm2_seq}:{drug_seq}\n")
+        # Test A: Evasion (Mutant vs Drug)
+        with open(os.path.join(output_dir, f"mutant_{i}_vs_drug.fasta"), "w") as f:
+            f.write(f">mutant_{i}_vs_drug | {mut_string}\n{mutant_mdm2_seq}:{drug_seq}\n")
             
-        # 3. Write Mutant vs Native p53 FASTA (Test B: Constraint)
-        p53_fasta_path = os.path.join(output_dir, f"mutant_{i}_vs_p53.fasta")
-        with open(p53_fasta_path, "w") as f:
-            f.write(f">mutant_{i}_vs_p53 | {mut_string}\n")
-            f.write(f"{mutant_mdm2_seq}:{NATIVE_P53_SEQ}\n")
+        # Test B: Constraint (Mutant vs p53)
+        with open(os.path.join(output_dir, f"mutant_{i}_vs_p53.fasta"), "w") as f:
+            f.write(f">mutant_{i}_vs_p53 | {mut_string}\n{mutant_mdm2_seq}:{NATIVE_P53_SEQ}\n")
 
     print(f"\nGenerated {num_mutants * 2} FASTA files in '{output_dir}'")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input_pdb", help="Path to the winning drug PDB")
-    parser.add_argument("--outdir", default="./phase2_fastas", help="Output directory for fastas")
+    # Hardcoded paths matching your specific environment structure
+    IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_drug_results/"
+    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/phase2_fastas/"
     
-    args = parser.parse_args()
-    generate_mutants(args.input_pdb, args.outdir)
+    generate_mutants(IN_DIR, OUT_DIR)
