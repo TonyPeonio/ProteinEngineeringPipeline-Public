@@ -42,7 +42,11 @@ RECYCLE_TOLERANCE=0.5
 NUM_MODELS=5
 
 # Generations to run
-NUM_GENERATIONS=2
+NUM_GENERATIONS=100
+
+# Mutations Config
+NUM_MUTANTS=1
+NUM_MUTATIONS=5
 
 # Ensure output directory exists using the dynamic path
 mkdir -p "$OUTPUT_DIR"
@@ -149,7 +153,7 @@ for (( GEN=$START_GEN; GEN<=NUM_GENERATIONS; GEN++ )); do
     
     echo "--- STEP 6: Mutate the Target ---"
     conda activate env_rosetta
-    python 6_cancer_mutator.py
+    python 6_cancer_mutator.py --num_mutants "$NUM_MUTANTS" --num_mutations "$NUM_MUTATIONS"
     
     echo "--- STEP 6b: ColabFold (Cancer Evaluation) ---"
     conda activate "$COLAB_DIR"
@@ -162,7 +166,7 @@ for (( GEN=$START_GEN; GEN<=NUM_GENERATIONS; GEN++ )); do
 
     echo "--- STEP 7: Select Winning Evasion Mutation ---"
     conda activate env_rosetta
-    python 7_evaluate_cancer.py
+    python 7_evaluate_cancer.py --gen "$GEN"
     
     # --- PHASE 3: CLOSING THE LOOP & SAVING DATA ---
     echo "--- Archiving Generation $GEN Results ---"

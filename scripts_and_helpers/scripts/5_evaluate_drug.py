@@ -66,6 +66,8 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
     os.makedirs(results_root, exist_ok=True)
     with open(os.path.join(results_root, "current_drug_pae.txt"), "w") as f:
         f.write(str(best_score))
+    with open(os.path.join(results_root, "current_drug_plddt.txt"), "w") as f:
+        f.write(str(best_metrics['plddt']))
 
     if best_json:
         # Match the PDB to the JSON using the rank/model identifier

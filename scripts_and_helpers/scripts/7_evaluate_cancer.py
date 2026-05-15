@@ -4,6 +4,7 @@ import json
 import shutil
 import numpy as np
 import re
+import argparse
 from Bio import PDB
 
 def extract_chain_a(input_pdb, output_pdb):
@@ -19,15 +20,23 @@ def extract_chain_a(input_pdb, output_pdb):
     io.set_structure(structure)
     io.save(output_pdb, ChainSelect())
 
-def evaluate_cancer(colabfold_out_dir, output_dir, num_mutants=5):
+def get_sequence_from_fasta(fasta_path):
+    if not os.path.exists(fasta_path):
+        return None
+    with open(fasta_path, 'r') as f:
+        return "".join([line.strip() for line in f if not line.startswith(">")])
+
+def evaluate_cancer(colabfold_out_dir, output_dir, current_gen, num_mutants=5):
     os.makedirs(output_dir, exist_ok=True)
+    results_dir = "/home/tonypeonio/ProteinDesignChallenge/results"
+    os.makedirs(results_dir, exist_ok=True)
     
     best_delta = -float('inf')
     winning_mutant = None
     winning_drug_pdb = None
     best_metrics = {}
 
-    print("Evaluating Phase 2 Cancer Mutations...")
+    print(f"--- Evaluating Phase 2 Cancer Mutations (Gen {current_gen}) ---")
 
     for i in range(1, num_mutants + 1):
         drug_json_pattern = os.path.join(colabfold_out_dir, f"*mutant_{i}_vs_drug*scores*.json")
@@ -37,9 +46,9 @@ def evaluate_cancer(colabfold_out_dir, output_dir, num_mutants=5):
         p53_jsons = glob.glob(p53_json_pattern)
         
         if not drug_jsons or not p53_jsons:
-            print(f"  -> Missing ColabFold outputs for mutant {i}. Skipping.")
             continue
             
+        # Select the best model for this specific mutant
         drug_json = sorted(drug_jsons)[0]
         p53_json = sorted(p53_jsons)[0]
         
@@ -49,7 +58,7 @@ def evaluate_cancer(colabfold_out_dir, output_dir, num_mutants=5):
             p53_pae = np.mean(json.load(f).get('pae', 100))
             
         delta = drug_pae - p53_pae
-        print(f"Mutant {i}: Drug PAE = {drug_pae:.2f} | p53 PAE = {p53_pae:.2f} | Fitness Delta = {delta:.2f}")
+        print(f"Mutant {i}: Drug PAE = {drug_pae:.2f} | p53 PAE = {p53_pae:.2f} | Delta = {delta:.2f}")
         
         if delta > best_delta:
             best_delta = delta
@@ -63,49 +72,61 @@ def evaluate_cancer(colabfold_out_dir, output_dir, num_mutants=5):
 
     if winning_drug_pdb:
         final_output_path = os.path.join(output_dir, "next_gen_target.pdb")
-        
-        print("\n" + "="*40)
-        print(f"WINNING EVASION MUTATION: Mutant {winning_mutant}")
-        print(f"Fitness Delta: {best_metrics['delta']:.2f}")
-        print(f"Extracting new MDM2 target to -> {final_output_path}")
-        print("="*40)
-        
         extract_chain_a(winning_drug_pdb, final_output_path)
         
-        # ==========================================
-        # AUTOMATIC CSV LOGGING
-        # ==========================================
-        results_dir = "/home/tonypeonio/ProteinDesignChallenge/results"
-        os.makedirs(results_dir, exist_ok=True)
+        # --- DIAGNOSTIC: Calculate Mutation Drift ---
+        wt_fasta = "/home/tonypeonio/ProteinDesignChallenge/scripts_and_helpers/fasta/mdm2_wildtype.fasta"
+        # Find the FASTA for the winning mutant
+        mutant_fasta_list = glob.glob(os.path.join("/home/tonypeonio/ProteinDesignChallenge/phase2_fastas", f"*mutant_{winning_mutant}_vs_drug.fasta"))
         
-        csv_path = os.path.join(results_dir, "arms_race_data.csv")
-        drug_pae_path = os.path.join(results_dir, "current_drug_pae.txt")
-        
-        pharmacologist_pae = 0.0
-        if os.path.exists(drug_pae_path):
-            with open(drug_pae_path, "r") as f:
-                pharmacologist_pae = float(f.read().strip())
-                
-        # Create CSV and header if it doesn't exist
-        if not os.path.exists(csv_path):
-            with open(csv_path, "w") as f:
-                f.write("Generation,Drug_PAE,Cancer_vs_Drug_PAE,Cancer_vs_p53_PAE,Fitness_Delta\n")
-                
-        # Calculate generation based on line count (Line 1 is header, Line 2 is Gen 1, etc.)
-        with open(csv_path, "r") as f:
-            gen = sum(1 for _ in f)
-            
-        # Append the new data
-        with open(csv_path, "a") as f:
-            f.write(f"{gen},{pharmacologist_pae:.2f},{best_metrics['drug_pae']:.2f},{best_metrics['p53_pae']:.2f},{best_metrics['delta']:.2f}\n")
-            
-        print(f"Successfully appended Generation {gen} data to arms_race_data.csv!")
+        mutation_count = 0
+        if os.path.exists(wt_fasta) and mutant_fasta_list:
+            wt_seq = get_sequence_from_fasta(wt_fasta)
+            mut_seq = get_sequence_from_fasta(mutant_fasta_list[0])
+            if wt_seq and mut_seq:
+                # Isolate just the MDM2 portion of the multimer FASTA
+                mut_mdm2_only = mut_seq.split(":")[0] 
+                mutation_count = sum(1 for a, b in zip(wt_seq, mut_mdm2_only) if a != b)
 
+        # --- DIAGNOSTIC: Load Pharmacologist Stats ---
+        pharmacologist_pae = 0.0
+        pharmacologist_plddt = 0.0
+        
+        pae_file = os.path.join(results_dir, "current_drug_pae.txt")
+        plddt_file = os.path.join(results_dir, "current_drug_plddt.txt")
+        
+        if os.path.exists(pae_file):
+            with open(pae_file, "r") as f: pharmacologist_pae = float(f.read().strip())
+        if os.path.exists(plddt_file):
+            with open(plddt_file, "r") as f: pharmacologist_plddt = float(f.read().strip())
+
+        # --- LOG TO CSV ---
+        csv_path = os.path.join(results_dir, "arms_race_data.csv")
+        header = "Generation,Drug_PAE,Cancer_vs_Drug_PAE,Cancer_vs_p53_PAE,Fitness_Delta,Drug_pLDDT,Mutations_vs_WT\n"
+        
+        if not os.path.exists(csv_path):
+            with open(csv_path, "w") as f: f.write(header)
+                
+        with open(csv_path, "a") as f:
+            f.write(f"{current_gen},{pharmacologist_pae:.2f},{best_metrics['drug_pae']:.2f},"
+                    f"{best_metrics['p53_pae']:.2f},{best_metrics['delta']:.2f},"
+                    f"{pharmacologist_plddt:.2f},{mutation_count}\n")
+            
+        print("\n" + "="*40)
+        print(f"GENERATION {current_gen} SUMMARY")
+        print(f"Winning Mutant: {winning_mutant} | Total Drift: {mutation_count} residues")
+        print(f"Fitness Delta: {best_metrics['delta']:.2f}")
+        print(f"Exported target for Gen {current_gen + 1}")
+        print("="*40)
     else:
-        print("Failed to identify a winning mutant.")
+        print("Error: Could not identify a winning mutant.")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gen", type=int, required=True)
+    args = parser.parse_args()
+    
     IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/colabfold_phase2_results"
     OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_cancer_results"
     
-    evaluate_cancer(IN_DIR, OUT_DIR)
+    evaluate_cancer(IN_DIR, OUT_DIR, args.gen)

@@ -2,6 +2,7 @@ import os
 import glob
 import random
 from Bio.PDB import PDBParser
+import argparse
 
 AMINO_ACIDS = list("ACDEFGHIKLMNPQRSTVWY")
 NATIVE_P53_SEQ = "ETFSDLWKLLPENNV"
@@ -39,7 +40,7 @@ def mutate_sequence(seq, num_mutations=2, start_idx=40, end_idx=90):
         
     return "".join(seq_list), mutated_positions
 
-def generate_mutants(input_dir, output_dir, num_mutants=5):
+def generate_mutants(input_dir, output_dir, num_mutants, num_mutations):
     os.makedirs(output_dir, exist_ok=True)
     
     # AUTOMATION: Automatically find the lead drug PDB
@@ -61,7 +62,7 @@ def generate_mutants(input_dir, output_dir, num_mutants=5):
     print(f"Wildtype MDM2 Length: {len(mdm2_seq)} | Lead Drug Length: {len(drug_seq)}")
     
     for i in range(1, num_mutants + 1):
-        mutant_mdm2_seq, mutations = mutate_sequence(mdm2_seq)
+        mutant_mdm2_seq, mutations = mutate_sequence(mdm2_seq, num_mutations)
         mut_string = "_".join(mutations)
         
         # Test A: Evasion (Mutant vs Drug)
@@ -75,8 +76,12 @@ def generate_mutants(input_dir, output_dir, num_mutants=5):
     print(f"\nGenerated {num_mutants * 2} FASTA files in '{output_dir}'")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--num_mutants", type=int, required=True)
+    parser.add_argument("--num_mutations", type=int, required=True)
+    args = parser.parse_args()
     # Hardcoded paths matching your specific environment structure
     IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_drug_results/"
     OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/phase2_fastas/"
     
-    generate_mutants(IN_DIR, OUT_DIR)
+    generate_mutants(IN_DIR, OUT_DIR, args.num_mutants, args.num_mutations)
