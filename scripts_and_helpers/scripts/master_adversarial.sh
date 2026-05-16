@@ -24,7 +24,7 @@ DESIGNABLE_CHAINS="B"
 
 # RFdiffusion Config
 BINDER_LENGTH="15-25"
-NUM_DESIGNS=1
+NUM_DESIGNS=5
 AA_RANGE="A25-109"
 BACKUP_AA_RANGE="A1-85"
 HOTSPOTS="" 
@@ -39,13 +39,13 @@ SERINE_PAINTING=0
 CORE_PROTECTION=1
 NUM_RECYCLES=12
 RECYCLE_TOLERANCE=0.5
-NUM_MODELS=1
+NUM_MODELS=2
 
 # Generations to run
 NUM_GENERATIONS=100
 
 # Mutations Config
-NUM_MUTANTS=1
+NUM_MUTANTS=10
 NUM_MUTATIONS=3
 
 # Ensure output directory exists using the dynamic path
@@ -97,10 +97,10 @@ if [ -f "$CSV_PATH" ]; then
     COMPLETED_GENS=$(($(wc -l < "$CSV_PATH") - 1))
     START_GEN=$((COMPLETED_GENS + 1))
 
-    if ["$COMPLETED_GENS$" -eq 0 ]; then
+    if [ "$COMPLETED_GENS" -eq 0 ]; then
         TARGET_PDB="$PROJECT_ROOT/scripts_and_helpers/pdb/${PDB_ID}_clean.pdb"
     else
-        TARGET_PDB="$PROJECT_ROOT/results/generation_${COMPLETED_GENS}/mutant_target_gen${COMPLETED_GENS+1}.pdb"
+        TARGET_PDB="$PROJECT_ROOT/results/generation_${COMPLETED_GENS}/mutant_target_gen${COMPLETED_GENS}.pdb"
         AA_RANGE="$BACKUP_AA_RANGE"
     fi
     echo "RESUMING PIPELINE: Starting at Generation $START_GEN"
@@ -208,12 +208,12 @@ for (( GEN=$START_GEN; GEN<=NUM_GENERATIONS; GEN++ )); do
     rm -rf "$OUTPUT_DIR/mpnn/"* || true
 
     echo "GENERATION $GEN COMPLETE!"
-done
 
-echo "==================================="
-echo "--- Creating Final Graph ---"
-echo "==================================="
-python 8_graph_results.py
+    echo "==================================="
+    echo "--- Creating Final Graph ---"
+    echo "==================================="
+    python 8_graph_results.py
+done
 
 echo ""
 echo "=========================================================="
