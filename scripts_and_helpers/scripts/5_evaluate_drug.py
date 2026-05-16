@@ -8,33 +8,14 @@ import argparse
 
 def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
     """
-    Finds the model with the lowest PAE for the SPECIFIC generation.
-    Handles the case where Gen 1 is untagged and Gen 2+ is 'genN'.
+    Evaluates all json files in the target directory to find the winning drug.
+    Assumes the directory is wiped clean each generation by the Bash loop.
     """
-    all_json_files = glob.glob(os.path.join(colabfold_out_dir, "*_scores*.json"))
-    current_gen_files = []
-
-    # Logic: If we are on Bash GEN 1, look for files WITHOUT 'gen' in the name.
-    # If we are on Bash GEN 2, look for 'gen1'. 
-    # Therefore, we look for 'gen' + (target_gen - 1)
-    search_tag = f"gen{target_gen - 1}"
-
-    for file in all_json_files:
-        basename = os.path.basename(file)
-        match = re.search(r'gen(\d+)', basename)
-        
-        if match:
-            # File has a tag; does it match our search_tag?
-            if f"gen{match.group(1)}" == search_tag:
-                current_gen_files.append(file)
-        else:
-            # File has NO tag; it must be from the very first wildtype round
-            if target_gen == 1:
-                current_gen_files.append(file)
+    current_gen_files = glob.glob(os.path.join(colabfold_out_dir, "*_scores*.json"))
 
     if not current_gen_files:
-        print(f"CRITICAL: No files found for Generation {target_gen} (Search tag: {search_tag})!")
-        return
+        # Throw an actual Exception so Bash set -e catches it and halts the pipeline!
+        raise FileNotFoundError(f"CRITICAL: No JSON score files found in {colabfold_out_dir}!")
     
     os.makedirs(output_dir, exist_ok=True)
 
@@ -42,7 +23,6 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
     best_json = None
     best_metrics = {}
 
-    # !!! FIXED: Iterate over current_gen_files, NOT all_json_files !!!
     print(f"Evaluating {len(current_gen_files)} designs for Generation {target_gen}...")
 
     for j_file in current_gen_files:
@@ -52,9 +32,6 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
         mean_pae = np.mean(data.get('pae', 100)) 
         mean_plddt = np.mean(data.get('plddt', 0))
         iptm = data.get('iptm', 0)
-
-        # Optional: Print progress for each
-        # print(f"  Checking {os.path.basename(j_file)} -> PAE: {mean_pae:.2f}")
 
         if mean_pae < best_score:
             best_score = mean_pae
@@ -90,16 +67,17 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
                 
                 shutil.copy(best_pdb, final_output_path)
             else:
-                print(f"Error: Matching PDB not found for {identifier}")
+                raise FileNotFoundError(f"Error: Matching PDB not found for {identifier}")
     else:
-        print("Error: No winning JSON found.")
+        raise ValueError("Error: No winning JSON found.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gen", type=int, required=True, help="Current generation number from bash")
     args = parser.parse_args()
     
+    # Ensure these paths match your centralized outputs folder
     IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/colabfold_multimer_results"
-    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_drug_results/"
+    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/evaluate_drug_results"
     
     evaluate_binders(IN_DIR, OUT_DIR, args.gen)

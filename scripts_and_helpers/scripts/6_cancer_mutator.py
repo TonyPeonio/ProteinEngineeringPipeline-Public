@@ -1,13 +1,11 @@
 import os
-import glob
 import random
-from Bio.PDB import PDBParser
 import argparse
+from Bio.PDB import PDBParser
 
 AMINO_ACIDS = list("ACDEFGHIKLMNPQRSTVWY")
 NATIVE_P53_SEQ = "ETFSDLWKLLPENNV"
 
-# Bulletproof dictionary to avoid Biopython version errors
 THREE_TO_ONE = {
     'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E',
     'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
@@ -17,7 +15,6 @@ THREE_TO_ONE = {
 }
 
 def extract_sequence(chain):
-    """Extracts a 1-letter amino acid sequence safely using a standard dictionary."""
     seq = ""
     for residue in chain:
         resname = residue.get_resname().strip().upper()
@@ -40,36 +37,31 @@ def mutate_sequence(seq, num_mutations=2, start_idx=40, end_idx=90):
         
     return "".join(seq_list), mutated_positions
 
-def generate_mutants(input_dir, output_dir, num_mutants, num_mutations):
+def generate_mutants(target_mdm2_pdb, lead_drug_pdb, output_dir, num_mutants, num_mutations):
     os.makedirs(output_dir, exist_ok=True)
-    
-    # AUTOMATION: Automatically find the lead drug PDB
-    pdbs = glob.glob(os.path.join(input_dir, "*.pdb"))
-    if not pdbs:
-        print(f"Error: No PDB files found in {input_dir}")
-        return
-        
-    latest_pdb = max(pdbs, key=os.path.getctime)
-    print(f"Auto-detected lead drug: {latest_pdb}")
-    
     parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("complex", latest_pdb)
     
-    model = structure[0]
-    mdm2_seq = extract_sequence(model['A'])
-    drug_seq = extract_sequence(model['B'])
+    # 1. EXTRACT THE TRUE PATHOGEN SEQUENCE from the safe archive!
+    print(f"Loading true Pathogen sequence from: {target_mdm2_pdb}")
+    target_structure = parser.get_structure("target", target_mdm2_pdb)
+    mdm2_seq = extract_sequence(target_structure[0]['A'])
     
-    print(f"Wildtype MDM2 Length: {len(mdm2_seq)} | Lead Drug Length: {len(drug_seq)}")
+    # 2. EXTRACT THE NEW DRUG SEQUENCE from the pharmacologist output!
+    print(f"Loading new Drug sequence from: {lead_drug_pdb}")
+    drug_structure = parser.get_structure("drug", lead_drug_pdb)
+    chains = list(drug_structure[0].get_chains())
+    drug_chain = min(chains, key=lambda c: len(list(c.get_residues())))
+    drug_seq = extract_sequence(drug_chain)
+    
+    print(f"Pathogen Length: {len(mdm2_seq)} | Lead Drug Length: {len(drug_seq)}")
     
     for i in range(1, num_mutants + 1):
         mutant_mdm2_seq, mutations = mutate_sequence(mdm2_seq, num_mutations)
         mut_string = "_".join(mutations)
         
-        # Test A: Evasion (Mutant vs Drug)
         with open(os.path.join(output_dir, f"mutant_{i}_vs_drug.fasta"), "w") as f:
             f.write(f">mutant_{i}_vs_drug | {mut_string}\n{mutant_mdm2_seq}:{drug_seq}\n")
             
-        # Test B: Constraint (Mutant vs p53)
         with open(os.path.join(output_dir, f"mutant_{i}_vs_p53.fasta"), "w") as f:
             f.write(f">mutant_{i}_vs_p53 | {mut_string}\n{mutant_mdm2_seq}:{NATIVE_P53_SEQ}\n")
 
@@ -77,11 +69,11 @@ def generate_mutants(input_dir, output_dir, num_mutants, num_mutations):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--target_mdm2", type=str, required=True, help="The currently evolved pathogen target")
+    parser.add_argument("--lead_drug", type=str, required=True, help="The newly designed drug")
+    parser.add_argument("--out_dir", type=str, required=True)
     parser.add_argument("--num_mutants", type=int, required=True)
     parser.add_argument("--num_mutations", type=int, required=True)
     args = parser.parse_args()
-    # Hardcoded paths matching your specific environment structure
-    IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_drug_results/"
-    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/phase2_fastas/"
     
-    generate_mutants(IN_DIR, OUT_DIR, args.num_mutants, args.num_mutations)
+    generate_mutants(args.target_mdm2, args.lead_drug, args.out_dir, args.num_mutants, args.num_mutations)

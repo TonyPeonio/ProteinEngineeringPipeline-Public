@@ -7,6 +7,35 @@ import re
 import argparse
 from Bio import PDB
 
+# Add this dictionary so Biopython can convert the PDB residues to a string
+THREE_TO_ONE = {
+    'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E',
+    'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
+    'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N',
+    'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S',
+    'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+}
+
+def extract_sequence_from_pdb(pdb_path, chain_id='A'):
+    """Extracts a 1-letter amino acid sequence from a specific chain in a PDB."""
+    if not os.path.exists(pdb_path):
+        return None
+        
+    parser = PDB.PDBParser(QUIET=True)
+    structure = parser.get_structure("complex", pdb_path)
+    model = structure[0]
+    
+    if chain_id not in model:
+        return None
+        
+    chain = model[chain_id]
+    seq = ""
+    for residue in chain:
+        resname = residue.get_resname().strip().upper()
+        if resname in THREE_TO_ONE:
+            seq += THREE_TO_ONE[resname]
+    return seq
+
 def extract_chain_a(input_pdb, output_pdb):
     """Extracts only Chain A (the mutated MDM2) to feed back into RFdiffusion."""
     parser = PDB.PDBParser(QUIET=True)
@@ -75,18 +104,28 @@ def evaluate_cancer(colabfold_out_dir, output_dir, current_gen, num_mutants=5):
         extract_chain_a(winning_drug_pdb, final_output_path)
         
         # --- DIAGNOSTIC: Calculate Mutation Drift ---
-        wt_fasta = "/home/tonypeonio/ProteinDesignChallenge/scripts_and_helpers/fasta/mdm2_wildtype.fasta"
-        # Find the FASTA for the winning mutant
-        mutant_fasta_list = glob.glob(os.path.join("/home/tonypeonio/ProteinDesignChallenge/phase2_fastas", f"*mutant_{winning_mutant}_vs_drug.fasta"))
+        # Update this path to point exactly to your Gen 1 starting PDB
+        wt_pdb = "/home/tonypeonio/ProteinDesignChallenge/scripts_and_helpers/pdb/1ycr_clean.pdb"
+        
+        mutant_fasta_list = glob.glob(os.path.join("/home/tonypeonio/ProteinDesignChallenge/outputs/phase2_fastas", f"*mutant_{winning_mutant}_vs_drug.fasta"))
         
         mutation_count = 0
-        if os.path.exists(wt_fasta) and mutant_fasta_list:
-            wt_seq = get_sequence_from_fasta(wt_fasta)
+        if os.path.exists(wt_pdb) and mutant_fasta_list:
+            # Extract Chain A (MDM2) from the Wildtype PDB
+            wt_seq = extract_sequence_from_pdb(wt_pdb, chain_id='A')
             mut_seq = get_sequence_from_fasta(mutant_fasta_list[0])
+            
             if wt_seq and mut_seq:
                 # Isolate just the MDM2 portion of the multimer FASTA
                 mut_mdm2_only = mut_seq.split(":")[0] 
+                
+                # Compare the two strings, stopping at whichever is shorter just in case
                 mutation_count = sum(1 for a, b in zip(wt_seq, mut_mdm2_only) if a != b)
+                
+                print(f"DIAGNOSTIC -> Wildtype Length: {len(wt_seq)} | Mutant Length: {len(mut_mdm2_only)}")
+                print(f"DIAGNOSTIC -> Drift calculated: {mutation_count} residues")
+        else:
+            print("⚠️ WARNING: Could not calculate drift. Missing WT PDB or Mutant FASTA.")
 
         # --- DIAGNOSTIC: Load Pharmacologist Stats ---
         pharmacologist_pae = 0.0
@@ -127,6 +166,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/colabfold_phase2_results"
-    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/evaluate_cancer_results"
-    
+    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/evaluate_cancer_results"    
     evaluate_cancer(IN_DIR, OUT_DIR, args.gen)
