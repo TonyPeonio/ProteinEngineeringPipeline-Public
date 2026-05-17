@@ -25,20 +25,10 @@ if [ ! -d "localcolabfold" ]; then
     cd ..
 fi
 
-# 3. Setup Basic Environments
-echo "Setting up basic environments..."
-[ -f "$ENVS_DIR/env_mpnn.yml" ] && conda env create -f "$ENVS_DIR/env_mpnn.yml" || true
-[ -f "$ENVS_DIR/env_rosetta.yml" ] && conda env create -f "$ENVS_DIR/env_rosetta.yml" || true
-[ -f "$ENVS_DIR/env_colabfold.yml" ] && conda env create -f "$ENVS_DIR/env_colabfold.yml" || true
-
 # 4. Download RFdiffusion Weights
 echo "Downloading RFdiffusion model weights..."
 cd "$PROJECT_ROOT/RFdiffusion"
 bash scripts/download_models.sh models
-
-# 5. Create Base RFdiffusion Environment
-echo "Creating base Python environment for RFdiffusion..."
-conda create -n env_rfdiffusion python=3.9 -y
 
 echo ""
 echo "Automated setup complete! Please check the README.md to finish configuring the RFdiffusion environment for your specific hardware."

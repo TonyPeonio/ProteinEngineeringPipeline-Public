@@ -94,7 +94,7 @@ def plot_arms_race(csv_path, output_image_path):
     print(f"Success! Advanced Graph saved to {output_image_path}")
 
 if __name__ == "__main__":
-    ROOT_DIR = "/home/tonypeonio/ProteinDesignChallenge"
+    ROOT_DIR = "../.."
     CSV_FILE = os.path.join(ROOT_DIR, "results", "arms_race_data.csv")
     OUTPUT_IMAGE = os.path.join(ROOT_DIR, "results", "arms_race_dashboard.png")
     

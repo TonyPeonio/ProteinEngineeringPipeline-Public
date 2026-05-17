@@ -39,7 +39,7 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
             best_metrics = {'pae': mean_pae, 'plddt': mean_plddt, 'iptm': iptm}
 
     # Save the winning drug PAE for the graphing script
-    results_root = "/home/tonypeonio/ProteinDesignChallenge/results"
+    results_root = "../../results"
     os.makedirs(results_root, exist_ok=True)
     with open(os.path.join(results_root, "current_drug_pae.txt"), "w") as f:
         f.write(str(best_score))
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Ensure these paths match your centralized outputs folder
-    IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/colabfold_multimer_results"
-    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/evaluate_drug_results"
+    IN_DIR = "../../outputs/colabfold_multimer_results"
+    OUT_DIR = "../../outputs/evaluate_drug_results"
     
     evaluate_binders(IN_DIR, OUT_DIR, args.gen)

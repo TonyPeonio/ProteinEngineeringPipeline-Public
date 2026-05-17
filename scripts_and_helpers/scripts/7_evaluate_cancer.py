@@ -57,7 +57,7 @@ def get_sequence_from_fasta(fasta_path):
 
 def evaluate_cancer(colabfold_out_dir, output_dir, current_gen, num_mutants=5):
     os.makedirs(output_dir, exist_ok=True)
-    results_dir = "/home/tonypeonio/ProteinDesignChallenge/results"
+    results_dir = "/home/tonypeonio/ProteinDesignChallenge_Agentic/results"
     os.makedirs(results_dir, exist_ok=True)
     
     best_delta = -float('inf')
@@ -105,9 +105,9 @@ def evaluate_cancer(colabfold_out_dir, output_dir, current_gen, num_mutants=5):
         
         # --- DIAGNOSTIC: Calculate Mutation Drift ---
         # Update this path to point exactly to your Gen 1 starting PDB
-        wt_pdb = "/home/tonypeonio/ProteinDesignChallenge/scripts_and_helpers/pdb/1ycr_clean.pdb"
+        wt_pdb = "/home/tonypeonio/ProteinDesignChallenge_Agentic/scripts_and_helpers/pdb/1ycr_clean.pdb"
         
-        mutant_fasta_list = glob.glob(os.path.join("/home/tonypeonio/ProteinDesignChallenge/outputs/phase2_fastas", f"*mutant_{winning_mutant}_vs_drug.fasta"))
+        mutant_fasta_list = glob.glob(os.path.join("/home/tonypeonio/ProteinDesignChallenge_Agentic/outputs/phase2_fastas", f"*mutant_{winning_mutant}_vs_drug.fasta"))
         
         mutation_count = 0
         if os.path.exists(wt_pdb) and mutant_fasta_list:
@@ -165,6 +165,6 @@ if __name__ == "__main__":
     parser.add_argument("--gen", type=int, required=True)
     args = parser.parse_args()
     
-    IN_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/colabfold_phase2_results"
-    OUT_DIR = "/home/tonypeonio/ProteinDesignChallenge/outputs/evaluate_cancer_results"    
+    IN_DIR = "../../outputs/colabfold_phase2_results"
+    OUT_DIR = "../../outputs/evaluate_cancer_results"    
     evaluate_cancer(IN_DIR, OUT_DIR, args.gen)
