@@ -12,55 +12,24 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 AMINO_ACIDS = list("ACDEFGHIKLMNPQRSTVWY")
 
-# Standard amino acid 3-to-1 letter translation for PDB parsing
-AA_MAP = {
-    'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
-    'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
-    'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
-    'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V'
-}
-
-
-
-def get_sequence_from_file(file_path, is_drug=False):
-    """Smart reader: Extracts sequence from either a .fasta or a .pdb"""
-    if file_path.endswith('.pdb'):
-        # In AlphaFold multimers, Target/Cancer is usually Chain A, Drug is Chain B
-        target_chain = 'B' if is_drug else 'A'
-        seq = []
-        seen_residues = set()
-        
-        with open(file_path, 'r') as f:
-            for line in f:
-                if line.startswith("ATOM"):
-                    chain_id = line[21]
-                    if chain_id == target_chain:
-                        res_name = line[17:20].strip()
-                        res_num = line[22:26].strip()
-                        residue_id = f"{chain_id}_{res_num}"
-                        
-                        if residue_id not in seen_residues:
-                            seen_residues.add(residue_id)
-                            seq.append(AA_MAP.get(res_name, 'X'))
-        return "".join(seq)
-    else:
-        # Standard FASTA read
-        with open(file_path, "r") as f:
-            return "".join([line.strip() for line in f.readlines() if not line.startswith(">")])
-
 def get_arms_race_history(csv_path):
+    """Reads the CSV to give the LLM memory of past generations."""
     if not os.path.exists(csv_path):
         return "No history available. This is Generation 1."
+    
     try:
         df = pd.read_csv(csv_path)
-        recent_history = df.tail(5)[['Generation', 'Fitness_Delta', 'Cancer_vs_Drug_PAE', 'Cancer_vs_p53_PAE', 'Mutations_vs_WT']].to_dict(orient='records')
+        # Give the LLM the last 5 generations to keep the prompt concise
+        recent_history = df.tail(5)[['Generation', 'Cancer_vs_Drug_PAE']].to_dict(orient='records')
         return json.dumps(recent_history, indent=2)
     except Exception as e:
         return f"Could not read history: {e}"
 
 def mutate_sequence_random(seq, num_mutations):
+    """The original stochastic mutator, used as a fallback if the AI fails."""
     seq_list = list(seq)
     end = len(seq) - 1
+    
     mutated_positions = []
     for _ in range(num_mutations):
         idx = random.randint(0, end)
@@ -68,9 +37,11 @@ def mutate_sequence_random(seq, num_mutations):
         new_aa = random.choice([aa for aa in AMINO_ACIDS if aa != current_aa])
         seq_list[idx] = new_aa
         mutated_positions.append(f"{current_aa}{idx+1}{new_aa}")
+        
     return "".join(seq_list), mutated_positions
 
 def get_agentic_mutations(seq, num_mutations, csv_path):
+    """Calls Gemini to strategically select drug mutations."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("WARNING: GEMINI_API_KEY not found. Falling back to random mutations.")
@@ -83,39 +54,40 @@ def get_agentic_mutations(seq, num_mutations, csv_path):
     end_idx = len(seq) - 1
     
     prompt = f"""
-    You are an evolving cancer protein (MDM2) locked in an evolutionary arms race with a pharmacologist's peptide drug.
-    Your goal is to mutate to EVADE the drug (maximize Cancer_vs_Drug_PAE) while maintaining your native function (minimize Cancer_vs_p53_PAE).
-    CRITICAL REMINDER: PAE is an error metric. To EVADE the drug, you must MAXIMIZE the Drug PAE. To MAINTAIN function, you must MINIMIZE the p53 PAE.
+    You are a pharmacologist evolving a peptide drug to fight in an evolutionary arms race with a rapidly mutating cancer protein (MDM2).
+    Your goal is to mutate your drug sequence to tightly bind to the cancer protein (you want to MINIMIZE the Cancer_vs_Drug_PAE score).
     
-    Here is the recent history of the arms race:
+    Here is the recent history of the arms race PAE scores:
     {history}
     
-    Your current amino acid sequence is:
+    Your current drug amino acid sequence is:
     {seq}
     
     Task:
-    Select exactly {num_mutations} strategic point mutations to make to your sequence.
+    Select exactly {num_mutations} strategic point mutations to make to your drug.
     - You must only select 0-indexed positions between {start_idx} and {end_idx}.
     - The new amino acid must be a 1-letter uppercase code from: {AMINO_ACIDS}.
     - Do not pick the amino acid that is already at that position.
     
     Respond STRICTLY with a JSON object matching this schema:
     {{
-        "thought_process": "Explain your evolutionary strategy here.",
+        "thought_process": "Explain your evolutionary strategy here. What did you learn from the history? Why are you targeting these specific positions?",
         "design": [
-            {{"position": 45, "new_aa": "A"}},
-            {{"position": 52, "new_aa": "Y"}}
+            {{"position": 2, "new_aa": "A"}},
+            {{"position": 12, "new_aa": "Y"}},
+            {{"position": 15, "new_aa": "W"}}
         ]
     }}
     """
     
     try:
-        print("Consulting Gemini (Cancer AI) for strategic mutations...")
+        print("Consulting Gemini (Pharmacologist AI) for strategic mutations...")
         model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"response_mime_type": "application/json"})
         response = model.generate_content(prompt)
+        
         data = json.loads(response.text)
 
-        log_path = "../../results/cancer_strategy_log.txt"
+        log_path = "../../results/pharma_strategy_log.txt"
         thought_process = data.get("thought_process", "No thought process provided.")
 
         try:
@@ -132,40 +104,46 @@ def get_agentic_mutations(seq, num_mutations, csv_path):
         for mut in design[:num_mutations]:
             idx = mut["position"]
             new_aa = mut["new_aa"]
+            
+            # Safety checks to prevent crashes
             if start_idx <= idx <= end_idx and new_aa in AMINO_ACIDS:
                 current_aa = seq_list[idx]
                 seq_list[idx] = new_aa
                 mutated_positions.append(f"{current_aa}{idx+1}{new_aa}")
                 
-        print("Successfully generated AI-driven cancer mutations!")
+        print("Successfully generated AI-driven drug mutations!")
         return "".join(seq_list), mutated_positions
 
     except Exception as e:
         print(f"Gemini API failed ({e}). Falling back to random mutations.")
         return mutate_sequence_random(seq, num_mutations)
 
-def mutate_cancer(input_file, history_csv, output_fasta, num_mutations):
-    # Smart read: extracts from PDB or FASTA seamlessly
-    cancer_seq = get_sequence_from_file(input_file, is_drug=False)
-    print(f"Loaded Cancer Sequence Length: {len(cancer_seq)}")
+def mutate_drug(input_fasta, history_csv, output_fasta, num_mutations):
+    # Read the current drug sequence
+    with open(input_fasta, "r") as f:
+        lines = f.readlines()
+        # Join lines ignoring the > header
+        drug_seq = "".join([line.strip() for line in lines if not line.startswith(">")])
+        
+    print(f"Current Drug Sequence: {drug_seq} (Length: {len(drug_seq)})")
     
     # Mutate
-    new_seq, mutations = get_agentic_mutations(cancer_seq, num_mutations, history_csv)
+    new_seq, mutations = get_agentic_mutations(drug_seq, num_mutations, history_csv)
     mut_string = "_".join(mutations) if mutations else "NO_MUT"
     
     # Write the new FASTA
     os.makedirs(os.path.dirname(output_fasta), exist_ok=True)
     with open(output_fasta, "w") as f:
-        f.write(f">cancer_target | {mut_string}\n{new_seq}\n")
+        f.write(f">pharmacologist_drug | {mut_string}\n{new_seq}\n")
         
-    print(f"Saved mutated cancer to {output_fasta}")
+    print(f"Saved mutated drug to {output_fasta}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--current_cancer", type=str, required=True, help="Path to current cancer FASTA or PDB")
+    parser.add_argument("--current_drug", type=str, required=True, help="Path to current drug FASTA")
     parser.add_argument("--history_csv", type=str, required=True, help="Path to arms race history")
-    parser.add_argument("--out_fasta", type=str, required=True, help="Where to save the new cancer FASTA")
+    parser.add_argument("--out_fasta", type=str, required=True, help="Where to save the new drug FASTA")
     parser.add_argument("--num_mutations", type=int, required=True)
     args = parser.parse_args()
     
-    mutate_cancer(args.current_cancer, args.history_csv, args.out_fasta, args.num_mutations)
+    mutate_drug(args.current_drug, args.history_csv, args.out_fasta, args.num_mutations)

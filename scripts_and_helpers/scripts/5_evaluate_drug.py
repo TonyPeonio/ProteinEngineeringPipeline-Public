@@ -6,6 +6,14 @@ import numpy as np
 import re
 import argparse
 
+# Standard amino acid 3-to-1 letter translation
+AA_MAP = {
+    'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
+    'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
+    'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
+    'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V'
+}
+
 def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
     """
     Evaluates all json files in the target directory to find the winning drug.
@@ -66,6 +74,30 @@ def evaluate_binders(colabfold_out_dir, output_dir, target_gen):
                 print("="*40)
                 
                 shutil.copy(best_pdb, final_output_path)
+
+                # --- STEP 5 EXTENSION: Extract FASTA straight from the winning PDB ---
+                fasta_output_path = os.path.join("../../outputs/", "current_drug.fasta")
+                seq = []
+                seen_residues = set()
+
+                with open(final_output_path, 'r') as f:
+                    for line in f:
+                        if line.startswith("ATOM"):
+                            chain_id = line[21]
+                            if chain_id == 'B':  # Drug is Chain B
+                                res_name = line[17:20].strip()
+                                res_num = line[22:26].strip()
+                                residue_id = f"{chain_id}_{res_num}"
+                                
+                                if residue_id not in seen_residues:
+                                    seen_residues.add(residue_id)
+                                    seq.append(AA_MAP.get(res_name, 'X'))
+                                    
+                with open(fasta_output_path, 'w') as f:
+                    f.write(f">drug_gen0_baseline\n{''.join(seq)}\n")
+                    
+                print(f"Extracted FASTA sequence for drug (Chain B) -> {fasta_output_path}")
+
             else:
                 raise FileNotFoundError(f"Error: Matching PDB not found for {identifier}")
     else:

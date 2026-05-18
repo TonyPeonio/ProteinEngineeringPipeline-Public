@@ -7,3 +7,4 @@ outputs
 pyrosetta_outputs
 dvc_archive.tar.xz
 results
+.env
